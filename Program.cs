@@ -4,18 +4,36 @@
 const char PARAMETER_CHAR = '-';
 const char CASE_INSENSITIVE = 'i';
 const char RECURSIVE = 'R';
+const char ADDITIONAL_LINES = 'C';
 #endregion
 
 #region Main Program
 {
     try
     {
+        var indicesToExclude = new HashSet<Index>();
+        var additionalLinesToPrint = 0;
         var parameters = string.Join("", args
-                .Select(argument => argument[0] == PARAMETER_CHAR ? argument.Substring(1) : "")
+                .Select((argument, index) =>
+                {
+                    if (argument[0] == PARAMETER_CHAR)
+                    {
+                        var currentParameter = argument.Substring(1);
+
+                        indicesToExclude.Add(index);
+                        if (currentParameter.Contains(ADDITIONAL_LINES) && int.TryParse(args[index + 1], out additionalLinesToPrint))
+                        {
+                            indicesToExclude.Add(index + 1);
+                        }
+
+                        return currentParameter;
+                    }
+                    else { return ""; }
+                })
             ).ToCharArray();
 
         var arguments = args
-            .Where(argument => argument[0] != PARAMETER_CHAR)
+            .Where((argument, index) => !indicesToExclude.Contains(index))
             .ToArray();
 
 
@@ -25,7 +43,7 @@ const char RECURSIVE = 'R';
 
         try
         {
-            LoopThroughFiles(path, filePattern, (arguments[2], contentPattern), parameters);
+            LoopThroughFiles(path, filePattern, (arguments[2], contentPattern), parameters, additionalLinesToPrint);
         }
         catch (DirectoryNotFoundException) { Console.WriteLine($"Directory not found: {path}"); }
     }
@@ -34,7 +52,7 @@ const char RECURSIVE = 'R';
 #endregion
 
 #region Methods
-void LoopThroughFiles(string path, string searchPattern, (string Text, Regex Regex) searchText, char[] parameters)
+void LoopThroughFiles(string path, string searchPattern, (string Text, Regex Regex) searchText, char[] parameters, int additionalLinesToPrint)
 {
     var filesArray = Directory.GetFiles(
         path,
@@ -66,9 +84,10 @@ void LoopThroughFiles(string path, string searchPattern, (string Text, Regex Reg
                     var formattedOutput = line.Replace(
                         searchText.Text,
                         $">>>{searchText.Text.ToUpper()}<<<",
-                        parameters.Contains(CASE_INSENSITIVE) ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal
+                        parameters.Contains(CASE_INSENSITIVE) ? StringComparison.CurrentCultureIgnoreCase : StringComparison.CurrentCulture
                     );
-                    Console.WriteLine($"\t{i + 1}: {formattedOutput}");
+
+                    PrintLines(lines, formattedOutput, i, additionalLinesToPrint);
                 }
             }
         }
@@ -78,5 +97,24 @@ void LoopThroughFiles(string path, string searchPattern, (string Text, Regex Reg
     Console.WriteLine($"\tNumber of found files: {foundFiles}");
     Console.WriteLine($"\tNumber of found lines: {foundLines}");
     Console.WriteLine($"\tNumber of occurences: {foundOccurences}");
+}
+
+void PrintLines(string[] lines, string formattedOutput, int startIndex, int additionalLinesToPrint)
+{
+    var lineIndices = Enumerable.Range(0, lines.Length);
+
+    for (int i = startIndex - additionalLinesToPrint; i < startIndex + additionalLinesToPrint + 1; i++)
+    {
+        if (lineIndices.Contains(i))
+        {
+            bool originalLine = i == startIndex;
+
+            if (originalLine) { Console.ForegroundColor = ConsoleColor.Yellow; }
+            Console.Write($"\t{i + 1}: ");
+            if (originalLine) { Console.ResetColor(); }
+
+            Console.WriteLine(originalLine ? formattedOutput : lines[i]);
+        }
+    }
 }
 #endregion
